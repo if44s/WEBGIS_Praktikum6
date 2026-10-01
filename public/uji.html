@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Uji Backend WebGIS</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    pre { background: #f1f3f5; padding: 1rem; overflow: auto; }
+    select, button { padding: .4rem .6rem; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Uji GeoJSON dari WFS</h1>
+  <p>Daftar layer diambil dari konfigurasi backend (.env).</p>
+
+  <label for="layer">Layer:</label>
+  <select id="layer" disabled>
+    <option>Memuat daftar layer...</option>
+  </select>
+  <button id="muat" type="button" disabled>Ambil data</button>
+
+  <p id="status" role="status">Belum ada permintaan.</p>
+  <pre id="hasil"></pre>
+
+  <script>
+    const pilihan = document.getElementById('layer');
+    const tombol = document.getElementById('muat');
+    const status = document.getElementById('status');
+    const hasil = document.getElementById('hasil');
+
+    // 1. Ambil daftar layer dari backend
+    async function muatDaftarLayer() {
+      try {
+        const response = await fetch('/api/layers');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Gagal memuat daftar layer.');
+        }
+
+        pilihan.innerHTML = '';
+        data.layers.forEach((l) => {
+          const opsi = document.createElement('option');
+          opsi.value = l.id;
+          opsi.textContent = l.id + ' (' + l.nama + ')';
+          pilihan.appendChild(opsi);
+        });
+
+        pilihan.disabled = false;
+        tombol.disabled = false;
+        status.textContent = data.layers.length + ' layer tersedia.';
+      } catch (error) {
+        status.textContent = 'Gagal: ' + error.message;
+      }
+    }
+
+    // 2. Ambil GeoJSON untuk layer yang dipilih
+    tombol.addEventListener('click', async () => {
+      const id = pilihan.value;
+      tombol.disabled = true;
+      status.textContent = 'Mengambil data ' + id + '...';
+      hasil.textContent = '';
+      try {
+        const response = await fetch(
+          '/api/layer-data/' + encodeURIComponent(id)
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Permintaan gagal.');
+        }
+        if (data.type !== 'FeatureCollection' ||
+            !Array.isArray(data.features)) {
+          throw new Error('Struktur GeoJSON tidak sesuai.');
+        }
+        status.textContent = 'HTTP ' + response.status +
+          ' | Layer: ' + id +
+          ' | Fitur diterima: ' + data.features.length;
+        hasil.textContent = JSON.stringify({
+          type: data.type,
+          features: data.features.slice(0, 2)
+        }, null, 2);
+      } catch (error) {
+        status.textContent = 'Gagal: ' + error.message;
+      } finally {
+        tombol.disabled = false;
+      }
+    });
+
+    muatDaftarLayer();
+  </script>
+</body>
+</html>
